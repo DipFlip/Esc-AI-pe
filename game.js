@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/examples/jsm/loaders/FBXLoader.js';
 
 // Game state
 const gameState = {
@@ -77,22 +77,18 @@ playerGroup.add(arrow);
 
 scene.add(playerGroup);
 
-// Load character model
-// You can use your own character model by replacing the URL below
-// Recommended sources:
-// - Ready Player Me: https://readyplayer.me/ (free avatars)
-// - Mixamo: https://www.mixamo.com/ (free rigged characters with animations)
-// Make sure your model includes "Idle/idle" and "Walk/walk" animations
-const loader = new GLTFLoader();
-const characterModelURL = 'https://models.readyplayer.me/6745e1ebfd6c6698df698853.glb'; // Free Ready Player Me avatar
+// Load character model from Mixamo FBX files
+const fbxLoader = new FBXLoader();
+let walkAnimation = null;
 
-loader.load(
-    characterModelURL,
-    (gltf) => {
-        characterModel = gltf.scene;
+// Load the character model (Y Bot with T-pose)
+fbxLoader.load(
+    '/Y Bot.fbx',
+    (fbx) => {
+        characterModel = fbx;
 
-        // Scale and position the character
-        characterModel.scale.set(1, 1, 1);
+        // Scale down the Mixamo character (they're usually quite large)
+        characterModel.scale.set(0.01, 0.01, 0.01);
         characterModel.position.set(0, 0, 0);
 
         // Enable shadows
@@ -109,36 +105,57 @@ loader.load(
         playerGroup.add(characterModel);
         useCharacterModel = true;
 
-        // Setup animations
-        if (gltf.animations && gltf.animations.length > 0) {
-            gameState.animations.mixer = new THREE.AnimationMixer(characterModel);
+        // Setup animation mixer
+        gameState.animations.mixer = new THREE.AnimationMixer(characterModel);
 
-            gltf.animations.forEach((clip) => {
-                const action = gameState.animations.mixer.clipAction(clip);
-                gameState.animations.actions[clip.name] = action;
-            });
-
-            // Try to find and play idle animation
-            const idleNames = ['Idle', 'idle', 'T-Pose', 'TPose'];
-            for (const name of idleNames) {
-                if (gameState.animations.actions[name]) {
-                    gameState.animations.actions[name].play();
-                    gameState.animations.current = name;
-                    break;
-                }
-            }
-
-            console.log('Character loaded! Available animations:', Object.keys(gameState.animations.actions));
+        // Create idle animation from T-pose (just use the first frame)
+        if (fbx.animations && fbx.animations.length > 0) {
+            const idleClip = fbx.animations[0];
+            idleClip.name = 'Idle';
+            const idleAction = gameState.animations.mixer.clipAction(idleClip);
+            gameState.animations.actions['Idle'] = idleAction;
+            idleAction.play();
+            gameState.animations.current = 'Idle';
         }
+
+        console.log('Character model loaded!');
+
+        // Now load the walking animation
+        loadWalkAnimation();
     },
     (progress) => {
-        console.log('Loading character:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
+        console.log('Loading character model:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
     },
     (error) => {
-        console.log('Could not load character model, using capsule fallback:', error);
+        console.error('Could not load character model, using capsule fallback:', error);
         useCharacterModel = false;
     }
 );
+
+// Load walking animation separately
+function loadWalkAnimation() {
+    fbxLoader.load(
+        '/Walking.fbx',
+        (fbx) => {
+            if (fbx.animations && fbx.animations.length > 0) {
+                const walkClip = fbx.animations[0];
+                walkClip.name = 'Walk';
+
+                // Apply the walk animation to our character model
+                const walkAction = gameState.animations.mixer.clipAction(walkClip);
+                gameState.animations.actions['Walk'] = walkAction;
+
+                console.log('Walk animation loaded! Available animations:', Object.keys(gameState.animations.actions));
+            }
+        },
+        (progress) => {
+            console.log('Loading walk animation:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
+        },
+        (error) => {
+            console.error('Could not load walk animation:', error);
+        }
+    );
+}
 
 // Create interactive cubes
 const cubeTypes = [
