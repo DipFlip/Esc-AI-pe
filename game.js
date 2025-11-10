@@ -6,9 +6,12 @@ const gameState = {
         position: { x: 0, y: 1, z: 0 },
         rotation: 0,
         inventory: [],
-        nearbyObjects: []
+        nearbyObjects: [],
+        keys: 0 // Track number of keys collected
     },
-    objects: []
+    objects: [],
+    doors: [],
+    floatingKeys: [] // Track floating key objects for animation
 };
 
 // Scene setup
@@ -92,6 +95,109 @@ function createCube(x, z, type) {
     return cube;
 }
 
+// Create floating key cubes
+function createKey(x, z) {
+    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+    const material = new THREE.MeshStandardMaterial({
+        color: 0xffd700, // Gold color
+        emissive: 0xffd700,
+        emissiveIntensity: 0.3,
+        metalness: 0.8,
+        roughness: 0.2
+    });
+    const key = new THREE.Mesh(geometry, material);
+    key.position.set(x, 1.5, z); // Start at 1.5 height
+    key.castShadow = true;
+    key.receiveShadow = true;
+
+    const keyData = {
+        mesh: key,
+        type: 'key',
+        pickupable: true,
+        id: `key_${x}_${z}`,
+        floatOffset: Math.random() * Math.PI * 2, // Random start phase
+        baseY: 1.5
+    };
+
+    scene.add(key);
+    gameState.objects.push(keyData);
+    gameState.floatingKeys.push(keyData);
+
+    return key;
+}
+
+// Create doors
+function createDoor(x, z, rotation = 0) {
+    const doorGroup = new THREE.Group();
+
+    // Door frame
+    const frameGeometry = new THREE.BoxGeometry(0.2, 3, 2.2);
+    const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Brown
+
+    const leftFrame = new THREE.Mesh(frameGeometry, frameMaterial);
+    leftFrame.position.set(-1.1, 1.5, 0);
+    leftFrame.castShadow = true;
+    doorGroup.add(leftFrame);
+
+    const rightFrame = new THREE.Mesh(frameGeometry, frameMaterial);
+    rightFrame.position.set(1.1, 1.5, 0);
+    rightFrame.castShadow = true;
+    doorGroup.add(rightFrame);
+
+    const topFrame = new THREE.Mesh(
+        new THREE.BoxGeometry(2.4, 0.3, 2.2),
+        frameMaterial
+    );
+    topFrame.position.set(0, 3, 0);
+    topFrame.castShadow = true;
+    doorGroup.add(topFrame);
+
+    // Door itself
+    const doorGeometry = new THREE.BoxGeometry(2, 2.8, 0.2);
+    const doorMaterial = new THREE.MeshStandardMaterial({
+        color: 0x654321,
+        metalness: 0.3,
+        roughness: 0.7
+    });
+    const doorMesh = new THREE.Mesh(doorGeometry, doorMaterial);
+    doorMesh.position.set(0, 1.5, 0);
+    doorMesh.castShadow = true;
+    doorMesh.receiveShadow = true;
+    doorGroup.add(doorMesh);
+
+    // Lock indicator (changes color when unlocked)
+    const lockGeometry = new THREE.SphereGeometry(0.15, 8, 8);
+    const lockMaterial = new THREE.MeshStandardMaterial({
+        color: 0xff0000,
+        emissive: 0xff0000,
+        emissiveIntensity: 0.5
+    });
+    const lock = new THREE.Mesh(lockGeometry, lockMaterial);
+    lock.position.set(0.7, 1.5, 0.15);
+    doorGroup.add(lock);
+
+    doorGroup.position.set(x, 0, z);
+    doorGroup.rotation.y = rotation;
+    scene.add(doorGroup);
+
+    const doorData = {
+        mesh: doorGroup,
+        doorMesh: doorMesh,
+        lock: lock,
+        type: 'door',
+        pickupable: false,
+        locked: true,
+        opening: false,
+        openProgress: 0,
+        id: `door_${x}_${z}`
+    };
+
+    gameState.objects.push(doorData);
+    gameState.doors.push(doorData);
+
+    return doorGroup;
+}
+
 // Place cubes around the scene
 createCube(5, 5, cubeTypes[0]);
 createCube(-5, 5, cubeTypes[1]);
@@ -99,8 +205,16 @@ createCube(5, -5, cubeTypes[2]);
 createCube(-5, -5, cubeTypes[3]);
 createCube(0, 8, cubeTypes[0]);
 createCube(8, 0, cubeTypes[1]);
-createCube(-8, 0, cubeTypes[2]);
-createCube(0, -8, cubeTypes[3]);
+
+// Place floating keys
+createKey(3, 3);
+createKey(-3, -3);
+createKey(6, -6);
+
+// Place doors
+createDoor(10, 0, Math.PI / 2); // Door on the right
+createDoor(-10, 0, Math.PI / 2); // Door on the left
+createDoor(0, 10, 0); // Door at the back
 
 // Camera setup
 camera.position.set(0, 5, 10);
@@ -309,7 +423,7 @@ function updateJoystick(touchEvent) {
 
     touch.joystick.active = true;
     touch.joystick.x = deltaX / joystickMaxDistance;
-    touch.joystick.y = deltaY / joystickMaxDistance;
+    touch.joystick.y = -deltaY / joystickMaxDistance; // Invert Y for natural forward/back
 
     joystickStick.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
 }
@@ -379,10 +493,20 @@ function pickup() {
     const pickupable = nearby.find(obj => obj.pickupable);
 
     if (pickupable) {
-        gameState.player.inventory.push(pickupable);
-        scene.remove(pickupable.mesh);
-        gameState.objects = gameState.objects.filter(obj => obj.id !== pickupable.id);
-        updateStatus(`Picked up ${pickupable.type} cube`);
+        // Special handling for keys
+        if (pickupable.type === 'key') {
+            gameState.player.keys++;
+            updateKeyCount();
+            scene.remove(pickupable.mesh);
+            gameState.objects = gameState.objects.filter(obj => obj.id !== pickupable.id);
+            gameState.floatingKeys = gameState.floatingKeys.filter(obj => obj.id !== pickupable.id);
+            updateStatus(`Picked up key! Keys: ${gameState.player.keys}`);
+        } else {
+            gameState.player.inventory.push(pickupable);
+            scene.remove(pickupable.mesh);
+            gameState.objects = gameState.objects.filter(obj => obj.id !== pickupable.id);
+            updateStatus(`Picked up ${pickupable.type} cube`);
+        }
     } else {
         updateStatus('No pickupable objects nearby');
     }
@@ -397,15 +521,43 @@ function interact() {
     }
 
     const obj = nearby[0];
-    updateStatus(`Interacting with ${obj.type} cube`);
+
+    // Special handling for doors
+    if (obj.type === 'door') {
+        if (obj.locked) {
+            if (gameState.player.keys > 0) {
+                // Unlock and open the door
+                gameState.player.keys--;
+                updateKeyCount();
+                obj.locked = false;
+                obj.opening = true;
+
+                // Change lock color to green
+                obj.lock.material.color.setHex(0x00ff00);
+                obj.lock.material.emissive.setHex(0x00ff00);
+
+                updateStatus(`Door unlocked! Keys remaining: ${gameState.player.keys}`);
+            } else {
+                updateStatus('Door is locked! Need a key.');
+            }
+        } else {
+            updateStatus('Door is already unlocked!');
+        }
+        return;
+    }
+
+    // Default interaction for other objects
+    updateStatus(`Interacting with ${obj.type}`);
 
     // Visual feedback
-    obj.mesh.material.emissive.setHex(0x444444);
-    setTimeout(() => {
-        if (obj.mesh.material) {
-            obj.mesh.material.emissive.setHex(0x000000);
-        }
-    }, 200);
+    if (obj.mesh.material && obj.mesh.material.emissive) {
+        obj.mesh.material.emissive.setHex(0x444444);
+        setTimeout(() => {
+            if (obj.mesh.material) {
+                obj.mesh.material.emissive.setHex(0x000000);
+            }
+        }, 200);
+    }
 }
 
 function findNearbyObjects() {
@@ -430,6 +582,13 @@ function updateStatus(message) {
     const statusEl = document.getElementById('status');
     if (statusEl) {
         statusEl.textContent = `Status: ${message}`;
+    }
+}
+
+function updateKeyCount() {
+    const keyCountEl = document.getElementById('key-count');
+    if (keyCountEl) {
+        keyCountEl.textContent = gameState.player.keys;
     }
 }
 
@@ -486,6 +645,36 @@ function animate() {
     camera.position.z = gameState.player.position.z + Math.cos(gameState.player.rotation) * cameraDistance;
     camera.lookAt(playerGroup.position);
 
+    // Animate floating keys
+    const time = Date.now() * 0.001; // Convert to seconds
+    for (const keyObj of gameState.floatingKeys) {
+        // Float up and down
+        const floatAmount = Math.sin(time * 2 + keyObj.floatOffset) * 0.3;
+        keyObj.mesh.position.y = keyObj.baseY + floatAmount;
+
+        // Rotate and sway
+        keyObj.mesh.rotation.y = time * 0.5 + keyObj.floatOffset;
+        keyObj.mesh.rotation.x = Math.sin(time * 1.5 + keyObj.floatOffset) * 0.2;
+        keyObj.mesh.rotation.z = Math.cos(time * 1.3 + keyObj.floatOffset) * 0.2;
+    }
+
+    // Animate door opening
+    for (const door of gameState.doors) {
+        if (door.opening && door.openProgress < 1) {
+            door.openProgress += 0.02; // Opening speed
+
+            if (door.openProgress >= 1) {
+                door.openProgress = 1;
+            }
+
+            // Slide door upward
+            door.doorMesh.position.y = 1.5 + (door.openProgress * 3);
+            // Also fade out the door
+            door.doorMesh.material.opacity = 1 - door.openProgress;
+            door.doorMesh.material.transparent = true;
+        }
+    }
+
     // Check for nearby objects
     findNearbyObjects();
 
@@ -506,6 +695,7 @@ window.gameAPI = {
         player: {
             position: { ...gameState.player.position },
             rotation: gameState.player.rotation,
+            keys: gameState.player.keys,
             inventory: gameState.player.inventory.map(i => ({ type: i.type, id: i.id })),
             nearbyObjects: gameState.player.nearbyObjects.map(o => ({
                 type: o.type,
@@ -513,7 +703,13 @@ window.gameAPI = {
                 pickupable: o.pickupable
             }))
         },
-        objectCount: gameState.objects.length
+        objectCount: gameState.objects.length,
+        doors: gameState.doors.map(d => ({
+            id: d.id,
+            locked: d.locked,
+            opening: d.opening,
+            openProgress: d.openProgress
+        }))
     })
 };
 
