@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 // Game state
 const gameState = {
@@ -7,11 +8,17 @@ const gameState = {
         rotation: 0,
         inventory: [],
         nearbyObjects: [],
-        keys: 0 // Track number of keys collected
+        keys: 0, // Track number of keys collected
+        isMoving: false // Track if player is moving for animations
     },
     objects: [],
     doors: [],
-    floatingKeys: [] // Track floating key objects for animation
+    floatingKeys: [], // Track floating key objects for animation
+    animations: {
+        mixer: null,
+        actions: {},
+        current: null
+    }
 };
 
 // Scene setup
@@ -47,8 +54,12 @@ ground.rotation.x = -Math.PI / 2;
 ground.receiveShadow = true;
 scene.add(ground);
 
-// Player capsule
+// Player setup
 const playerGroup = new THREE.Group();
+let characterModel = null;
+let useCharacterModel = false;
+
+// Create fallback capsule player
 const capsuleGeometry = new THREE.CapsuleGeometry(0.5, 1, 8, 16);
 const capsuleMaterial = new THREE.MeshStandardMaterial({ color: 0x4a90e2 });
 const playerMesh = new THREE.Mesh(capsuleGeometry, capsuleMaterial);
@@ -65,6 +76,69 @@ arrow.position.set(0, 1, -0.8);
 playerGroup.add(arrow);
 
 scene.add(playerGroup);
+
+// Load character model
+// You can use your own character model by replacing the URL below
+// Recommended sources:
+// - Ready Player Me: https://readyplayer.me/ (free avatars)
+// - Mixamo: https://www.mixamo.com/ (free rigged characters with animations)
+// Make sure your model includes "Idle/idle" and "Walk/walk" animations
+const loader = new GLTFLoader();
+const characterModelURL = 'https://models.readyplayer.me/6745e1ebfd6c6698df698853.glb'; // Free Ready Player Me avatar
+
+loader.load(
+    characterModelURL,
+    (gltf) => {
+        characterModel = gltf.scene;
+
+        // Scale and position the character
+        characterModel.scale.set(1, 1, 1);
+        characterModel.position.set(0, 0, 0);
+
+        // Enable shadows
+        characterModel.traverse((node) => {
+            if (node.isMesh) {
+                node.castShadow = true;
+                node.receiveShadow = true;
+            }
+        });
+
+        // Hide capsule and arrow, show character
+        playerMesh.visible = false;
+        arrow.visible = false;
+        playerGroup.add(characterModel);
+        useCharacterModel = true;
+
+        // Setup animations
+        if (gltf.animations && gltf.animations.length > 0) {
+            gameState.animations.mixer = new THREE.AnimationMixer(characterModel);
+
+            gltf.animations.forEach((clip) => {
+                const action = gameState.animations.mixer.clipAction(clip);
+                gameState.animations.actions[clip.name] = action;
+            });
+
+            // Try to find and play idle animation
+            const idleNames = ['Idle', 'idle', 'T-Pose', 'TPose'];
+            for (const name of idleNames) {
+                if (gameState.animations.actions[name]) {
+                    gameState.animations.actions[name].play();
+                    gameState.animations.current = name;
+                    break;
+                }
+            }
+
+            console.log('Character loaded! Available animations:', Object.keys(gameState.animations.actions));
+        }
+    },
+    (progress) => {
+        console.log('Loading character:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
+    },
+    (error) => {
+        console.log('Could not load character model, using capsule fallback:', error);
+        useCharacterModel = false;
+    }
+);
 
 // Create interactive cubes
 const cubeTypes = [
@@ -482,6 +556,54 @@ function rotatePlayer(direction) {
     }
 }
 
+// Animation control
+function playAnimation(animationName) {
+    if (!gameState.animations.mixer || !gameState.animations.actions[animationName]) {
+        return;
+    }
+
+    // If already playing this animation, do nothing
+    if (gameState.animations.current === animationName) {
+        return;
+    }
+
+    const newAction = gameState.animations.actions[animationName];
+    const oldAction = gameState.animations.current ? gameState.animations.actions[gameState.animations.current] : null;
+
+    if (oldAction) {
+        oldAction.fadeOut(0.3);
+    }
+
+    newAction.reset().fadeIn(0.3).play();
+    gameState.animations.current = animationName;
+}
+
+function updatePlayerAnimation(isMoving) {
+    if (!gameState.animations.mixer) return;
+
+    // Find walk and idle animations
+    const walkNames = ['Walk', 'walk', 'Walking', 'walking', 'Run', 'run'];
+    const idleNames = ['Idle', 'idle', 'T-Pose', 'TPose'];
+
+    if (isMoving) {
+        // Try to play walk animation
+        for (const name of walkNames) {
+            if (gameState.animations.actions[name]) {
+                playAnimation(name);
+                return;
+            }
+        }
+    } else {
+        // Try to play idle animation
+        for (const name of idleNames) {
+            if (gameState.animations.actions[name]) {
+                playAnimation(name);
+                return;
+            }
+        }
+    }
+}
+
 function pickup() {
     const nearby = findNearbyObjects();
 
@@ -593,14 +715,33 @@ function updateKeyCount() {
 }
 
 // Game loop
+const clock = new THREE.Clock();
+
 function animate() {
     requestAnimationFrame(animate);
 
+    const delta = clock.getDelta();
+
+    // Track if player is moving for animations
+    let isMoving = false;
+
     // Handle movement
-    if (keys.w || keys.arrowup) movePlayer('forward');
-    if (keys.s || keys.arrowdown) movePlayer('backward');
-    if (keys.a) movePlayer('left');
-    if (keys.d) movePlayer('right');
+    if (keys.w || keys.arrowup) {
+        movePlayer('forward');
+        isMoving = true;
+    }
+    if (keys.s || keys.arrowdown) {
+        movePlayer('backward');
+        isMoving = true;
+    }
+    if (keys.a) {
+        movePlayer('left');
+        isMoving = true;
+    }
+    if (keys.d) {
+        movePlayer('right');
+        isMoving = true;
+    }
     if (keys.arrowleft) rotatePlayer('left');
     if (keys.arrowright) rotatePlayer('right');
 
@@ -620,13 +761,21 @@ function animate() {
         if (Math.abs(touch.joystick.y) > 0.1) {
             gameState.player.position.x -= Math.sin(rad) * speed * touch.joystick.y;
             gameState.player.position.z -= Math.cos(rad) * speed * touch.joystick.y;
+            isMoving = true;
         }
 
         // Left/right based on joystick X
         if (Math.abs(touch.joystick.x) > 0.1) {
             gameState.player.position.x += Math.cos(rad) * speed * touch.joystick.x;
             gameState.player.position.z -= Math.sin(rad) * speed * touch.joystick.x;
+            isMoving = true;
         }
+    }
+
+    // Update character animations
+    updatePlayerAnimation(isMoving);
+    if (gameState.animations.mixer) {
+        gameState.animations.mixer.update(delta);
     }
 
     // Update player position and rotation
