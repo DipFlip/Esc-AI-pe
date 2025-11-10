@@ -9,7 +9,9 @@ const gameState = {
         inventory: [],
         nearbyObjects: [],
         keys: 0, // Track number of keys collected
-        isMoving: false // Track if player is moving for animations
+        isMoving: false, // Track if player is moving for animations
+        moveDirection: { x: 0, z: 0 }, // Track movement direction for character rotation
+        characterRotation: 0 // Target rotation for character model
     },
     objects: [],
     doors: [],
@@ -79,7 +81,6 @@ scene.add(playerGroup);
 
 // Load character model from Mixamo FBX files
 const fbxLoader = new FBXLoader();
-let walkAnimation = null;
 
 // Load the character model (Y Bot with T-pose)
 fbxLoader.load(
@@ -89,7 +90,9 @@ fbxLoader.load(
 
         // Scale down the Mixamo character (they're usually quite large)
         characterModel.scale.set(0.01, 0.01, 0.01);
-        characterModel.position.set(0, 0, 0);
+
+        // Position on the ground - adjust Y to compensate for model height
+        characterModel.position.set(0, -1, 0);
 
         // Enable shadows
         characterModel.traverse((node) => {
@@ -108,19 +111,10 @@ fbxLoader.load(
         // Setup animation mixer
         gameState.animations.mixer = new THREE.AnimationMixer(characterModel);
 
-        // Create idle animation from T-pose (just use the first frame)
-        if (fbx.animations && fbx.animations.length > 0) {
-            const idleClip = fbx.animations[0];
-            idleClip.name = 'Idle';
-            const idleAction = gameState.animations.mixer.clipAction(idleClip);
-            gameState.animations.actions['Idle'] = idleAction;
-            idleAction.play();
-            gameState.animations.current = 'Idle';
-        }
-
         console.log('Character model loaded!');
 
-        // Now load the walking animation
+        // Load animations
+        loadIdleAnimation();
         loadWalkAnimation();
     },
     (progress) => {
@@ -132,7 +126,34 @@ fbxLoader.load(
     }
 );
 
-// Load walking animation separately
+// Load idle animation
+function loadIdleAnimation() {
+    fbxLoader.load(
+        '/Idle.fbx',
+        (fbx) => {
+            if (fbx.animations && fbx.animations.length > 0) {
+                const idleClip = fbx.animations[0];
+                idleClip.name = 'Idle';
+
+                // Apply the idle animation to our character model
+                const idleAction = gameState.animations.mixer.clipAction(idleClip);
+                gameState.animations.actions['Idle'] = idleAction;
+                idleAction.play();
+                gameState.animations.current = 'Idle';
+
+                console.log('Idle animation loaded!');
+            }
+        },
+        (progress) => {
+            console.log('Loading idle animation:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
+        },
+        (error) => {
+            console.error('Could not load idle animation:', error);
+        }
+    );
+}
+
+// Load walking animation
 function loadWalkAnimation() {
     fbxLoader.load(
         '/Walking.fbx',
@@ -742,21 +763,40 @@ function animate() {
     // Track if player is moving for animations
     let isMoving = false;
 
+    // Reset movement direction
+    gameState.player.moveDirection.x = 0;
+    gameState.player.moveDirection.z = 0;
+
     // Handle movement
+    const rad = gameState.player.rotation;
+    const speed = 0.1;
+
     if (keys.w || keys.arrowup) {
-        movePlayer('forward');
+        gameState.player.position.x -= Math.sin(rad) * speed;
+        gameState.player.position.z -= Math.cos(rad) * speed;
+        gameState.player.moveDirection.x -= Math.sin(rad);
+        gameState.player.moveDirection.z -= Math.cos(rad);
         isMoving = true;
     }
     if (keys.s || keys.arrowdown) {
-        movePlayer('backward');
+        gameState.player.position.x += Math.sin(rad) * speed;
+        gameState.player.position.z += Math.cos(rad) * speed;
+        gameState.player.moveDirection.x += Math.sin(rad);
+        gameState.player.moveDirection.z += Math.cos(rad);
         isMoving = true;
     }
     if (keys.a) {
-        movePlayer('left');
+        gameState.player.position.x -= Math.cos(rad) * speed;
+        gameState.player.position.z += Math.sin(rad) * speed;
+        gameState.player.moveDirection.x -= Math.cos(rad);
+        gameState.player.moveDirection.z += Math.sin(rad);
         isMoving = true;
     }
     if (keys.d) {
-        movePlayer('right');
+        gameState.player.position.x += Math.cos(rad) * speed;
+        gameState.player.position.z -= Math.sin(rad) * speed;
+        gameState.player.moveDirection.x += Math.cos(rad);
+        gameState.player.moveDirection.z -= Math.sin(rad);
         isMoving = true;
     }
     if (keys.arrowleft) rotatePlayer('left');
@@ -771,13 +811,12 @@ function animate() {
 
     // Handle joystick input (mobile)
     if (touch.joystick.active) {
-        const speed = 0.1;
-        const rad = gameState.player.rotation;
-
         // Forward/backward based on joystick Y
         if (Math.abs(touch.joystick.y) > 0.1) {
             gameState.player.position.x -= Math.sin(rad) * speed * touch.joystick.y;
             gameState.player.position.z -= Math.cos(rad) * speed * touch.joystick.y;
+            gameState.player.moveDirection.x -= Math.sin(rad) * touch.joystick.y;
+            gameState.player.moveDirection.z -= Math.cos(rad) * touch.joystick.y;
             isMoving = true;
         }
 
@@ -785,8 +824,27 @@ function animate() {
         if (Math.abs(touch.joystick.x) > 0.1) {
             gameState.player.position.x += Math.cos(rad) * speed * touch.joystick.x;
             gameState.player.position.z -= Math.sin(rad) * speed * touch.joystick.x;
+            gameState.player.moveDirection.x += Math.cos(rad) * touch.joystick.x;
+            gameState.player.moveDirection.z -= Math.sin(rad) * touch.joystick.x;
             isMoving = true;
         }
+    }
+
+    // Update character rotation to face movement direction
+    if (isMoving && characterModel) {
+        const targetRotation = Math.atan2(gameState.player.moveDirection.x, gameState.player.moveDirection.z);
+        gameState.player.characterRotation = targetRotation;
+
+        // Smoothly interpolate character rotation
+        const currentRotation = characterModel.rotation.y;
+        let rotationDiff = targetRotation - currentRotation;
+
+        // Normalize angle difference to [-PI, PI]
+        while (rotationDiff > Math.PI) rotationDiff -= Math.PI * 2;
+        while (rotationDiff < -Math.PI) rotationDiff += Math.PI * 2;
+
+        // Apply smooth rotation (lerp)
+        characterModel.rotation.y += rotationDiff * 0.15;
     }
 
     // Update character animations
