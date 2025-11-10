@@ -164,11 +164,6 @@ function loadWalkAnimation() {
 
                 // Apply the walk animation to our character model
                 const walkAction = gameState.animations.mixer.clipAction(walkClip);
-
-                // Slow down the animation to match character movement speed
-                // Adjust this value to match your movement speed (lower = slower)
-                walkAction.timeScale = 0.6;
-
                 gameState.animations.actions['Walk'] = walkAction;
 
                 console.log('Walk animation loaded! Available animations:', Object.keys(gameState.animations.actions));
