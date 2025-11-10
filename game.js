@@ -157,7 +157,9 @@ window.addEventListener('mousemove', (e) => {
 
 window.addEventListener('mousedown', () => {
     mouse.isDown = true;
-    document.body.requestPointerLock();
+    if (renderer.domElement.requestPointerLock) {
+        renderer.domElement.requestPointerLock();
+    }
 });
 
 window.addEventListener('mouseup', () => {
