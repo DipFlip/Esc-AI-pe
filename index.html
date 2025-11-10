@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Esc-AI-pe - AI Agent Game</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        #game-canvas {
+            display: block;
+        }
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 14px;
+            max-width: 300px;
+        }
+        #ui h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+        #ui p {
+            margin: 5px 0;
+        }
+        #status {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div id="ui">
+        <h2>Esc-AI-pe Game</h2>
+        <p><strong>Controls:</strong></p>
+        <p>WASD / Arrow Keys - Move</p>
+        <p>E - Interact</p>
+        <p>Q - Pickup</p>
+        <p>Mouse - Look around</p>
+    </div>
+    <div id="status">
+        Status: Ready
+    </div>
+    <script type="module" src="/game.js"></script>
+</body>
+</html>
