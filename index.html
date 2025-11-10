@@ -9,6 +9,7 @@
             margin: 0;
             overflow: hidden;
             font-family: 'Arial', sans-serif;
+            touch-action: none;
         }
         #game-canvas {
             display: block;
@@ -23,6 +24,7 @@
             border-radius: 8px;
             font-size: 14px;
             max-width: 300px;
+            z-index: 100;
         }
         #ui h2 {
             margin: 0 0 10px 0;
@@ -40,6 +42,111 @@
             padding: 10px;
             border-radius: 8px;
             font-size: 12px;
+            z-index: 100;
+        }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 250px;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        #joystick-container {
+            position: absolute;
+            bottom: 30px;
+            left: 30px;
+            width: 120px;
+            height: 120px;
+            pointer-events: auto;
+        }
+
+        #joystick-base {
+            width: 120px;
+            height: 120px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            position: absolute;
+        }
+
+        #joystick-stick {
+            width: 50px;
+            height: 50px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 3px solid rgba(255, 255, 255, 1);
+            border-radius: 50%;
+            position: absolute;
+            top: 35px;
+            left: 35px;
+            transition: all 0.1s;
+        }
+
+        #action-buttons {
+            position: absolute;
+            bottom: 30px;
+            right: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            pointer-events: auto;
+        }
+
+        .action-btn {
+            width: 70px;
+            height: 70px;
+            background: rgba(74, 144, 226, 0.7);
+            border: 3px solid rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+            color: white;
+            font-size: 14px;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.1s;
+        }
+
+        .action-btn:active {
+            background: rgba(74, 144, 226, 1);
+            transform: scale(0.95);
+        }
+
+        .action-btn.pickup {
+            background: rgba(255, 107, 107, 0.7);
+        }
+
+        .action-btn.pickup:active {
+            background: rgba(255, 107, 107, 1);
+        }
+
+        @media (min-width: 768px) {
+            #mobile-controls {
+                display: none;
+            }
+        }
+
+        @media (max-width: 767px) {
+            #ui {
+                font-size: 12px;
+                padding: 10px;
+                max-width: 200px;
+            }
+            #ui h2 {
+                font-size: 14px;
+            }
+            #status {
+                font-size: 10px;
+                left: 50%;
+                transform: translateX(-50%);
+                bottom: 180px;
+            }
         }
     </style>
 </head>
@@ -55,6 +162,19 @@
     <div id="status">
         Status: Ready
     </div>
+
+    <!-- Mobile Touch Controls -->
+    <div id="mobile-controls">
+        <div id="joystick-container">
+            <div id="joystick-base"></div>
+            <div id="joystick-stick"></div>
+        </div>
+        <div id="action-buttons">
+            <div class="action-btn interact">Interact<br>(E)</div>
+            <div class="action-btn pickup">Pickup<br>(Q)</div>
+        </div>
+    </div>
+
     <script type="module" src="/game.js"></script>
 </body>
 </html>

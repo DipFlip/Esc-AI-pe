@@ -172,6 +172,166 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
+// Touch controls for mobile
+const touch = {
+    camera: {
+        active: false,
+        startX: 0,
+        startY: 0,
+        identifier: null
+    },
+    joystick: {
+        active: false,
+        x: 0,
+        y: 0,
+        identifier: null
+    }
+};
+
+// Touch event for camera rotation
+let cameraRotationTouch = null;
+
+renderer.domElement.addEventListener('touchstart', (e) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const touchEvent = e.changedTouches[i];
+        // Only use touches on the upper part of the screen for camera
+        if (touchEvent.clientY < window.innerHeight - 250) {
+            if (!cameraRotationTouch) {
+                cameraRotationTouch = {
+                    identifier: touchEvent.identifier,
+                    lastX: touchEvent.clientX,
+                    lastY: touchEvent.clientY
+                };
+            }
+        }
+    }
+});
+
+renderer.domElement.addEventListener('touchmove', (e) => {
+    e.preventDefault();
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const touchEvent = e.changedTouches[i];
+        if (cameraRotationTouch && touchEvent.identifier === cameraRotationTouch.identifier) {
+            const deltaX = touchEvent.clientX - cameraRotationTouch.lastX;
+            const deltaY = touchEvent.clientY - cameraRotationTouch.lastY;
+
+            gameState.player.rotation -= deltaX * 0.005;
+
+            cameraRotationTouch.lastX = touchEvent.clientX;
+            cameraRotationTouch.lastY = touchEvent.clientY;
+        }
+    }
+}, { passive: false });
+
+renderer.domElement.addEventListener('touchend', (e) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const touchEvent = e.changedTouches[i];
+        if (cameraRotationTouch && touchEvent.identifier === cameraRotationTouch.identifier) {
+            cameraRotationTouch = null;
+        }
+    }
+});
+
+renderer.domElement.addEventListener('touchcancel', (e) => {
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        const touchEvent = e.changedTouches[i];
+        if (cameraRotationTouch && touchEvent.identifier === cameraRotationTouch.identifier) {
+            cameraRotationTouch = null;
+        }
+    }
+});
+
+// Joystick handling
+const joystickContainer = document.getElementById('joystick-container');
+const joystickStick = document.getElementById('joystick-stick');
+const joystickBase = document.getElementById('joystick-base');
+
+let joystickTouch = null;
+const joystickMaxDistance = 35; // pixels from center
+
+if (joystickContainer) {
+    joystickContainer.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        if (!joystickTouch && e.touches.length > 0) {
+            joystickTouch = e.touches[0].identifier;
+            updateJoystick(e.touches[0]);
+        }
+    }, { passive: false });
+
+    joystickContainer.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.touches.length; i++) {
+            if (e.touches[i].identifier === joystickTouch) {
+                updateJoystick(e.touches[i]);
+                break;
+            }
+        }
+    }, { passive: false });
+
+    joystickContainer.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === joystickTouch) {
+                joystickTouch = null;
+                touch.joystick.active = false;
+                touch.joystick.x = 0;
+                touch.joystick.y = 0;
+                joystickStick.style.transform = 'translate(0px, 0px)';
+                break;
+            }
+        }
+    }, { passive: false });
+
+    joystickContainer.addEventListener('touchcancel', (e) => {
+        joystickTouch = null;
+        touch.joystick.active = false;
+        touch.joystick.x = 0;
+        touch.joystick.y = 0;
+        joystickStick.style.transform = 'translate(0px, 0px)';
+    }, { passive: false });
+}
+
+function updateJoystick(touchEvent) {
+    const rect = joystickContainer.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    let deltaX = touchEvent.clientX - centerX;
+    let deltaY = touchEvent.clientY - centerY;
+
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    if (distance > joystickMaxDistance) {
+        const angle = Math.atan2(deltaY, deltaX);
+        deltaX = Math.cos(angle) * joystickMaxDistance;
+        deltaY = Math.sin(angle) * joystickMaxDistance;
+    }
+
+    touch.joystick.active = true;
+    touch.joystick.x = deltaX / joystickMaxDistance;
+    touch.joystick.y = deltaY / joystickMaxDistance;
+
+    joystickStick.style.transform = `translate(${deltaX}px, ${deltaY}px)`;
+}
+
+// Action buttons
+const interactBtn = document.querySelector('.action-btn.interact');
+const pickupBtn = document.querySelector('.action-btn.pickup');
+
+if (interactBtn) {
+    interactBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        interact();
+    }, { passive: false });
+}
+
+if (pickupBtn) {
+    pickupBtn.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        pickup();
+    }, { passive: false });
+}
+
 // Game functions
 function movePlayer(direction) {
     const speed = 0.1;
@@ -290,6 +450,24 @@ function animate() {
         gameState.player.rotation -= mouse.x;
         mouse.x = 0;
         mouse.y = 0;
+    }
+
+    // Handle joystick input (mobile)
+    if (touch.joystick.active) {
+        const speed = 0.1;
+        const rad = gameState.player.rotation;
+
+        // Forward/backward based on joystick Y
+        if (Math.abs(touch.joystick.y) > 0.1) {
+            gameState.player.position.x -= Math.sin(rad) * speed * touch.joystick.y;
+            gameState.player.position.z -= Math.cos(rad) * speed * touch.joystick.y;
+        }
+
+        // Left/right based on joystick X
+        if (Math.abs(touch.joystick.x) > 0.1) {
+            gameState.player.position.x += Math.cos(rad) * speed * touch.joystick.x;
+            gameState.player.position.z -= Math.sin(rad) * speed * touch.joystick.x;
+        }
     }
 
     // Update player position and rotation
