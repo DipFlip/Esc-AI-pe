@@ -16,6 +16,8 @@ const gameState = {
     objects: [],
     doors: [],
     floatingKeys: [], // Track floating key objects for animation
+    pushableBlock: null, // Track the pushable block
+    hole: null, // Track the hole position
     animations: {
         mixer: null,
         actions: {},
@@ -314,6 +316,62 @@ function createDoor(x, z, rotation = 0) {
     return doorGroup;
 }
 
+// Create pushable block
+function createPushableBlock(x, z) {
+    const blockGeometry = new THREE.BoxGeometry(1, 1, 1);
+    const blockMaterial = new THREE.MeshStandardMaterial({
+        color: 0x8B4513, // Brown color
+        roughness: 0.7,
+        metalness: 0.2
+    });
+    const block = new THREE.Mesh(blockGeometry, blockMaterial);
+    block.position.set(x, 0.5, z);
+    block.castShadow = true;
+    block.receiveShadow = true;
+    scene.add(block);
+
+    const blockData = {
+        mesh: block,
+        type: 'pushable_block',
+        pickupable: false,
+        id: 'pushable_block',
+        gridX: Math.round(x),
+        gridZ: Math.round(z),
+        inHole: false
+    };
+
+    gameState.objects.push(blockData);
+    gameState.pushableBlock = blockData;
+
+    return block;
+}
+
+// Create hole in the ground
+function createHole(x, z) {
+    const holeGeometry = new THREE.PlaneGeometry(1.1, 1.1);
+    const holeMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a, // Dark color for the hole
+        roughness: 1.0
+    });
+    const hole = new THREE.Mesh(holeGeometry, holeMaterial);
+    hole.rotation.x = -Math.PI / 2;
+    hole.position.set(x, 0.01, z); // Slightly above ground to avoid z-fighting
+    hole.receiveShadow = true;
+    scene.add(hole);
+
+    const holeData = {
+        mesh: hole,
+        x: x,
+        z: z,
+        gridX: Math.round(x),
+        gridZ: Math.round(z)
+    };
+
+    gameState.hole = holeData;
+
+    return hole;
+}
+
 // Create perimeter walls (1m tall fence)
 const wallHeight = 1;
 const wallThickness = 0.3;
@@ -417,6 +475,10 @@ createKey(6, -6);
 createDoor(arenaSize / 2, 0, Math.PI / 2); // Door on the right (east)
 createDoor(-arenaSize / 2, 0, Math.PI / 2); // Door on the left (west)
 createDoor(0, arenaSize / 2, 0); // Door at the back (north)
+
+// Create pushable block and hole
+createPushableBlock(-2, -2);
+createHole(2, 2);
 
 // Camera setup
 camera.position.set(0, 5, 10);
@@ -762,6 +824,53 @@ function pickup() {
     }
 }
 
+function pushBlock(blockObj) {
+    // Calculate push direction based on player's rotation
+    const rad = gameState.player.rotation;
+    const pushX = -Math.sin(rad);
+    const pushZ = -Math.cos(rad);
+
+    // Determine the primary push direction (snap to cardinal directions)
+    let deltaX = 0;
+    let deltaZ = 0;
+
+    if (Math.abs(pushX) > Math.abs(pushZ)) {
+        // Push in X direction
+        deltaX = pushX > 0 ? 1 : -1;
+    } else {
+        // Push in Z direction
+        deltaZ = pushZ > 0 ? 1 : -1;
+    }
+
+    // Calculate new position
+    const newX = blockObj.mesh.position.x + deltaX;
+    const newZ = blockObj.mesh.position.z + deltaZ;
+
+    // Check if new position would collide with walls or doors
+    if (checkCollision(newX, newZ)) {
+        updateStatus('Cannot push block - blocked by obstacle!');
+        return;
+    }
+
+    // Move the block
+    blockObj.mesh.position.x = newX;
+    blockObj.mesh.position.z = newZ;
+    blockObj.gridX = Math.round(newX);
+    blockObj.gridZ = Math.round(newZ);
+
+    updateStatus('Pushed the block!');
+
+    // Check if block is now in the hole
+    if (gameState.hole &&
+        blockObj.gridX === gameState.hole.gridX &&
+        blockObj.gridZ === gameState.hole.gridZ) {
+        // Block is in the hole - lower it
+        blockObj.inHole = true;
+        blockObj.mesh.position.y = 0; // Lower to ground level
+        updateStatus('Block slotted into the hole!');
+    }
+}
+
 function interact() {
     const nearby = findNearbyObjects();
 
@@ -793,6 +902,12 @@ function interact() {
         } else {
             updateStatus('Door is already unlocked!');
         }
+        return;
+    }
+
+    // Special handling for pushable block
+    if (obj.type === 'pushable_block') {
+        pushBlock(obj);
         return;
     }
 
@@ -872,6 +987,19 @@ function checkCollision(newX, newZ) {
             if (doorBox.intersectsBox(playerBox)) {
                 return true; // Collision detected
             }
+        }
+    }
+
+    // Check collision with pushable block (only if not in hole)
+    if (gameState.pushableBlock && !gameState.pushableBlock.inHole) {
+        const blockBox = new THREE.Box3().setFromObject(gameState.pushableBlock.mesh);
+        const playerBox = new THREE.Box3(
+            new THREE.Vector3(newX - playerRadius, 0, newZ - playerRadius),
+            new THREE.Vector3(newX + playerRadius, 2, newZ + playerRadius)
+        );
+
+        if (blockBox.intersectsBox(playerBox)) {
+            return true; // Collision detected
         }
     }
 
