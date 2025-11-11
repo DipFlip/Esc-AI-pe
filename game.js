@@ -223,7 +223,7 @@ fbxLoader.load(
         keyModelTemplate = fbx;
 
         // Scale the key appropriately (much larger to be visible)
-        keyModelTemplate.scale.set(0.5, 0.5, 0.5);
+        keyModelTemplate.scale.set(2.0, 2.0, 2.0);
 
         // Enable shadows
         keyModelTemplate.traverse((node) => {
@@ -900,9 +900,31 @@ function pushBlock(blockObj) {
     const newZ = blockObj.mesh.position.z + deltaZ;
 
     // Check if new position would collide with walls or doors
-    if (checkCollision(newX, newZ)) {
-        updateStatus('Cannot push block - blocked by obstacle!');
-        return;
+    // Use block-specific collision detection (block is 1x1, so use 0.5 radius from center)
+    const blockRadius = 0.5;
+    const blockBox = new THREE.Box3(
+        new THREE.Vector3(newX - blockRadius, 0, newZ - blockRadius),
+        new THREE.Vector3(newX + blockRadius, 1, newZ + blockRadius)
+    );
+
+    // Check collision with walls
+    for (const wall of walls) {
+        const wallBox = new THREE.Box3().setFromObject(wall.mesh);
+        if (wallBox.intersectsBox(blockBox)) {
+            updateStatus('Cannot push block - blocked by wall!');
+            return;
+        }
+    }
+
+    // Check collision with locked doors
+    for (const door of gameState.doors) {
+        if (door.locked || (!door.locked && door.openProgress < 0.8)) {
+            const doorBox = new THREE.Box3().setFromObject(door.doorMesh);
+            if (doorBox.intersectsBox(blockBox)) {
+                updateStatus('Cannot push block - blocked by door!');
+                return;
+            }
+        }
     }
 
     // Move the block
