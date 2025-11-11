@@ -213,20 +213,76 @@ function createCube(x, z, type) {
     return cube;
 }
 
-// Create floating key cubes
+// Store loaded key model for reuse
+let keyModelTemplate = null;
+
+// Load key model
+fbxLoader.load(
+    '/key.fbx',
+    (fbx) => {
+        keyModelTemplate = fbx;
+
+        // Scale the key appropriately
+        keyModelTemplate.scale.set(0.01, 0.01, 0.01);
+
+        // Enable shadows
+        keyModelTemplate.traverse((node) => {
+            if (node.isMesh) {
+                node.castShadow = true;
+                node.receiveShadow = true;
+                // Add gold material to the key
+                if (node.material) {
+                    node.material.color.setHex(0xffd700);
+                    node.material.emissive.setHex(0xffd700);
+                    node.material.emissiveIntensity = 0.3;
+                    node.material.metalness = 0.8;
+                    node.material.roughness = 0.2;
+                }
+            }
+        });
+
+        console.log('Key model loaded!');
+
+        // Create keys now that model is loaded
+        createKey(3, 3);
+        createKey(-3, -3);
+        createKey(6, -6);
+    },
+    (progress) => {
+        console.log('Loading key model:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
+    },
+    (error) => {
+        console.error('Could not load key model, using cube fallback:', error);
+        // Fallback to creating cube keys if model fails to load
+        createKey(3, 3);
+        createKey(-3, -3);
+        createKey(6, -6);
+    }
+);
+
+// Create floating keys (now uses FBX model when available)
 function createKey(x, z) {
-    const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
-    const material = new THREE.MeshStandardMaterial({
-        color: 0xffd700, // Gold color
-        emissive: 0xffd700,
-        emissiveIntensity: 0.3,
-        metalness: 0.8,
-        roughness: 0.2
-    });
-    const key = new THREE.Mesh(geometry, material);
-    key.position.set(x, 1.5, z); // Start at 1.5 height
-    key.castShadow = true;
-    key.receiveShadow = true;
+    let key;
+
+    if (keyModelTemplate) {
+        // Use the loaded FBX model
+        key = keyModelTemplate.clone();
+        key.position.set(x, 1.5, z); // Start at 1.5 height
+    } else {
+        // Fallback to cube if model not loaded
+        const geometry = new THREE.BoxGeometry(0.6, 0.6, 0.6);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xffd700, // Gold color
+            emissive: 0xffd700,
+            emissiveIntensity: 0.3,
+            metalness: 0.8,
+            roughness: 0.2
+        });
+        key = new THREE.Mesh(geometry, material);
+        key.position.set(x, 1.5, z);
+        key.castShadow = true;
+        key.receiveShadow = true;
+    }
 
     const keyData = {
         mesh: key,
@@ -466,10 +522,7 @@ createCube(-5, -5, cubeTypes[3]);
 createCube(0, 8, cubeTypes[0]);
 createCube(8, 0, cubeTypes[1]);
 
-// Place floating keys
-createKey(3, 3);
-createKey(-3, -3);
-createKey(6, -6);
+// Floating keys are now created after key.fbx loads (see key model loader above)
 
 // Place doors in the walls
 createDoor(arenaSize / 2, 0, Math.PI / 2); // Door on the right (east)
