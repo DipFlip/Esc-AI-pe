@@ -88,8 +88,8 @@ fbxLoader.load(
     (fbx) => {
         characterModel = fbx;
 
-        // Scale down the Mixamo character - 20% bigger than before
-        characterModel.scale.set(0.012, 0.012, 0.012);
+        // Scale down the Mixamo character - 10% bigger than previous size
+        characterModel.scale.set(0.0132, 0.0132, 0.0132);
 
         // Position on the ground - adjust Y to compensate for model height
         characterModel.position.set(0, -1, 0);
@@ -165,8 +165,8 @@ function loadWalkAnimation() {
                 // Apply the walk animation to our character model
                 const walkAction = gameState.animations.mixer.clipAction(walkClip);
 
-                // Slow down walk animation to 80% speed
-                walkAction.timeScale = 0.8;
+                // Speed up walk animation to 110%
+                walkAction.timeScale = 1.1;
 
                 gameState.animations.actions['Walk'] = walkAction;
 
