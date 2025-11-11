@@ -222,8 +222,8 @@ fbxLoader.load(
     (fbx) => {
         keyModelTemplate = fbx;
 
-        // Scale the key appropriately
-        keyModelTemplate.scale.set(0.01, 0.01, 0.01);
+        // Scale the key appropriately (much larger to be visible)
+        keyModelTemplate.scale.set(0.5, 0.5, 0.5);
 
         // Enable shadows
         keyModelTemplate.traverse((node) => {
