@@ -164,6 +164,10 @@ function loadWalkAnimation() {
 
                 // Apply the walk animation to our character model
                 const walkAction = gameState.animations.mixer.clipAction(walkClip);
+
+                // Slow down walk animation to 80% speed
+                walkAction.timeScale = 0.8;
+
                 gameState.animations.actions['Walk'] = walkAction;
 
                 console.log('Walk animation loaded! Available animations:', Object.keys(gameState.animations.actions));
@@ -1005,7 +1009,8 @@ function animate() {
         gameState.player.position.y,
         gameState.player.position.z
     );
-    playerGroup.rotation.y = gameState.player.rotation;
+    // Don't rotate the playerGroup - let the character model rotate independently
+    // playerGroup.rotation.y = gameState.player.rotation;
 
     // Camera follows player
     const cameraDistance = 8;
