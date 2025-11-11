@@ -381,7 +381,11 @@ function createPushableBlock(x, z) {
         id: 'pushable_block',
         gridX: Math.round(x),
         gridZ: Math.round(z),
-        inHole: false
+        inHole: false,
+        pushing: false,
+        targetX: x,
+        targetZ: z,
+        pushSpeed: 0.05
     };
 
     gameState.objects.push(blockData);
@@ -866,6 +870,12 @@ function pickup() {
 }
 
 function pushBlock(blockObj) {
+    // Don't allow pushing if already animating
+    if (blockObj.pushing) {
+        updateStatus('Block is already moving!');
+        return;
+    }
+
     // Calculate push direction based on player's rotation
     const rad = gameState.player.rotation;
     const pushX = -Math.sin(rad);
@@ -915,23 +925,14 @@ function pushBlock(blockObj) {
         }
     }
 
-    // Move the block
-    blockObj.mesh.position.x = newX;
-    blockObj.mesh.position.z = newZ;
+    // Start the push animation
+    blockObj.pushing = true;
+    blockObj.targetX = newX;
+    blockObj.targetZ = newZ;
     blockObj.gridX = Math.round(newX);
     blockObj.gridZ = Math.round(newZ);
 
     updateStatus('Pushed the block!');
-
-    // Check if block is now in the hole
-    if (gameState.hole &&
-        blockObj.gridX === gameState.hole.gridX &&
-        blockObj.gridZ === gameState.hole.gridZ) {
-        // Block is in the hole - lower it
-        blockObj.inHole = true;
-        blockObj.mesh.position.y = 0; // Lower to ground level
-        updateStatus('Block slotted into the hole!');
-    }
 }
 
 function interact() {
@@ -1234,6 +1235,55 @@ function animate() {
             // Also fade out the door
             door.doorMesh.material.opacity = 1 - door.openProgress;
             door.doorMesh.material.transparent = true;
+        }
+    }
+
+    // Animate block pushing
+    if (gameState.pushableBlock && gameState.pushableBlock.pushing) {
+        const block = gameState.pushableBlock;
+        const currentX = block.mesh.position.x;
+        const currentZ = block.mesh.position.z;
+        const deltaX = block.targetX - currentX;
+        const deltaZ = block.targetZ - currentZ;
+        const distance = Math.sqrt(deltaX * deltaX + deltaZ * deltaZ);
+
+        if (distance > 0.01) {
+            // Still moving - interpolate position
+            block.mesh.position.x += deltaX * block.pushSpeed;
+            block.mesh.position.z += deltaZ * block.pushSpeed;
+        } else {
+            // Reached target - snap to final position and stop
+            block.mesh.position.x = block.targetX;
+            block.mesh.position.z = block.targetZ;
+            block.pushing = false;
+
+            // Check if block is now in the hole
+            if (gameState.hole &&
+                block.gridX === gameState.hole.gridX &&
+                block.gridZ === gameState.hole.gridZ &&
+                !block.inHole) {
+                // Block is in the hole - animate it falling in
+                block.inHole = true;
+                block.fallingInHole = true;
+                block.targetY = -0.4; // Lower it more so it's mostly in the hole
+                updateStatus('Block slotted into the hole!');
+            }
+        }
+    }
+
+    // Animate block falling into hole
+    if (gameState.pushableBlock && gameState.pushableBlock.fallingInHole) {
+        const block = gameState.pushableBlock;
+        const currentY = block.mesh.position.y;
+        const deltaY = block.targetY - currentY;
+
+        if (Math.abs(deltaY) > 0.01) {
+            // Still falling - interpolate position
+            block.mesh.position.y += deltaY * 0.1;
+        } else {
+            // Finished falling
+            block.mesh.position.y = block.targetY;
+            block.fallingInHole = false;
         }
     }
 
