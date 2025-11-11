@@ -304,8 +304,8 @@ function createKey(x, z) {
 function createDoor(x, z, rotation = 0) {
     const doorGroup = new THREE.Group();
 
-    // Door frame
-    const frameGeometry = new THREE.BoxGeometry(0.2, 3, 2.2);
+    // Door frame (narrower depth)
+    const frameGeometry = new THREE.BoxGeometry(0.2, 3, 0.3);
     const frameMaterial = new THREE.MeshStandardMaterial({ color: 0x8B4513 }); // Brown
 
     const leftFrame = new THREE.Mesh(frameGeometry, frameMaterial);
@@ -319,7 +319,7 @@ function createDoor(x, z, rotation = 0) {
     doorGroup.add(rightFrame);
 
     const topFrame = new THREE.Mesh(
-        new THREE.BoxGeometry(2.4, 0.3, 2.2),
+        new THREE.BoxGeometry(2.4, 0.3, 0.3),
         frameMaterial
     );
     topFrame.position.set(0, 3, 0);
@@ -339,17 +339,6 @@ function createDoor(x, z, rotation = 0) {
     doorMesh.receiveShadow = true;
     doorGroup.add(doorMesh);
 
-    // Lock indicator (changes color when unlocked)
-    const lockGeometry = new THREE.SphereGeometry(0.15, 8, 8);
-    const lockMaterial = new THREE.MeshStandardMaterial({
-        color: 0xff0000,
-        emissive: 0xff0000,
-        emissiveIntensity: 0.5
-    });
-    const lock = new THREE.Mesh(lockGeometry, lockMaterial);
-    lock.position.set(0.7, 1.5, 0.15);
-    doorGroup.add(lock);
-
     doorGroup.position.set(x, 0, z);
     doorGroup.rotation.y = rotation;
     scene.add(doorGroup);
@@ -357,7 +346,6 @@ function createDoor(x, z, rotation = 0) {
     const doorData = {
         mesh: doorGroup,
         doorMesh: doorMesh,
-        lock: lock,
         type: 'door',
         pickupable: false,
         locked: true,
@@ -965,10 +953,6 @@ function interact() {
                 updateKeyCount();
                 obj.locked = false;
                 obj.opening = true;
-
-                // Change lock color to green
-                obj.lock.material.color.setHex(0x00ff00);
-                obj.lock.material.emissive.setHex(0x00ff00);
 
                 updateStatus(`Door unlocked! Keys remaining: ${gameState.player.keys}`);
             } else {
