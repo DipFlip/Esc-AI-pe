@@ -88,8 +88,8 @@ fbxLoader.load(
     (fbx) => {
         characterModel = fbx;
 
-        // Scale down the Mixamo character (they're usually quite large)
-        characterModel.scale.set(0.01, 0.01, 0.01);
+        // Scale down the Mixamo character - 20% bigger than before
+        characterModel.scale.set(0.012, 0.012, 0.012);
 
         // Position on the ground - adjust Y to compensate for model height
         characterModel.position.set(0, -1, 0);
@@ -310,6 +310,92 @@ function createDoor(x, z, rotation = 0) {
     return doorGroup;
 }
 
+// Create perimeter walls (1m tall fence)
+const wallHeight = 1;
+const wallThickness = 0.3;
+const arenaSize = 20; // 20x20 area
+const wallMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8B7355,
+    roughness: 0.8
+});
+
+// Wall segments and their collision boxes
+const walls = [];
+
+// North wall (back) - with gap for door
+const northWallLeft = new THREE.Mesh(
+    new THREE.BoxGeometry(arenaSize / 2 - 1.2, wallHeight, wallThickness),
+    wallMaterial
+);
+northWallLeft.position.set(-arenaSize / 4 - 0.6, wallHeight / 2, arenaSize / 2);
+northWallLeft.castShadow = true;
+northWallLeft.receiveShadow = true;
+scene.add(northWallLeft);
+walls.push({ mesh: northWallLeft });
+
+const northWallRight = new THREE.Mesh(
+    new THREE.BoxGeometry(arenaSize / 2 - 1.2, wallHeight, wallThickness),
+    wallMaterial
+);
+northWallRight.position.set(arenaSize / 4 + 0.6, wallHeight / 2, arenaSize / 2);
+northWallRight.castShadow = true;
+northWallRight.receiveShadow = true;
+scene.add(northWallRight);
+walls.push({ mesh: northWallRight });
+
+// South wall (front)
+const southWall = new THREE.Mesh(
+    new THREE.BoxGeometry(arenaSize, wallHeight, wallThickness),
+    wallMaterial
+);
+southWall.position.set(0, wallHeight / 2, -arenaSize / 2);
+southWall.castShadow = true;
+southWall.receiveShadow = true;
+scene.add(southWall);
+walls.push({ mesh: southWall });
+
+// East wall (right) - with gap for door
+const eastWallTop = new THREE.Mesh(
+    new THREE.BoxGeometry(wallThickness, wallHeight, arenaSize / 2 - 1.2),
+    wallMaterial
+);
+eastWallTop.position.set(arenaSize / 2, wallHeight / 2, arenaSize / 4 + 0.6);
+eastWallTop.castShadow = true;
+eastWallTop.receiveShadow = true;
+scene.add(eastWallTop);
+walls.push({ mesh: eastWallTop });
+
+const eastWallBottom = new THREE.Mesh(
+    new THREE.BoxGeometry(wallThickness, wallHeight, arenaSize / 2 - 1.2),
+    wallMaterial
+);
+eastWallBottom.position.set(arenaSize / 2, wallHeight / 2, -arenaSize / 4 - 0.6);
+eastWallBottom.castShadow = true;
+eastWallBottom.receiveShadow = true;
+scene.add(eastWallBottom);
+walls.push({ mesh: eastWallBottom });
+
+// West wall (left) - with gap for door
+const westWallTop = new THREE.Mesh(
+    new THREE.BoxGeometry(wallThickness, wallHeight, arenaSize / 2 - 1.2),
+    wallMaterial
+);
+westWallTop.position.set(-arenaSize / 2, wallHeight / 2, arenaSize / 4 + 0.6);
+westWallTop.castShadow = true;
+westWallTop.receiveShadow = true;
+scene.add(westWallTop);
+walls.push({ mesh: westWallTop });
+
+const westWallBottom = new THREE.Mesh(
+    new THREE.BoxGeometry(wallThickness, wallHeight, arenaSize / 2 - 1.2),
+    wallMaterial
+);
+westWallBottom.position.set(-arenaSize / 2, wallHeight / 2, -arenaSize / 4 - 0.6);
+westWallBottom.castShadow = true;
+westWallBottom.receiveShadow = true;
+scene.add(westWallBottom);
+walls.push({ mesh: westWallBottom });
+
 // Place cubes around the scene
 createCube(5, 5, cubeTypes[0]);
 createCube(-5, 5, cubeTypes[1]);
@@ -323,10 +409,10 @@ createKey(3, 3);
 createKey(-3, -3);
 createKey(6, -6);
 
-// Place doors
-createDoor(10, 0, Math.PI / 2); // Door on the right
-createDoor(-10, 0, Math.PI / 2); // Door on the left
-createDoor(0, 10, 0); // Door at the back
+// Place doors in the walls
+createDoor(arenaSize / 2, 0, Math.PI / 2); // Door on the right (east)
+createDoor(-arenaSize / 2, 0, Math.PI / 2); // Door on the left (west)
+createDoor(0, arenaSize / 2, 0); // Door at the back (north)
 
 // Camera setup
 camera.position.set(0, 5, 10);
@@ -752,6 +838,42 @@ function updateKeyCount() {
     }
 }
 
+// Collision detection
+function checkCollision(newX, newZ) {
+    const playerRadius = 0.5; // Collision radius around player
+
+    // Check collision with walls
+    for (const wall of walls) {
+        const wallBox = new THREE.Box3().setFromObject(wall.mesh);
+        const playerBox = new THREE.Box3(
+            new THREE.Vector3(newX - playerRadius, 0, newZ - playerRadius),
+            new THREE.Vector3(newX + playerRadius, 2, newZ + playerRadius)
+        );
+
+        if (wallBox.intersectsBox(playerBox)) {
+            return true; // Collision detected
+        }
+    }
+
+    // Check collision with locked doors
+    for (const door of gameState.doors) {
+        if (door.locked || (!door.locked && door.openProgress < 0.8)) {
+            // Door is locked or still opening
+            const doorBox = new THREE.Box3().setFromObject(door.doorMesh);
+            const playerBox = new THREE.Box3(
+                new THREE.Vector3(newX - playerRadius, 0, newZ - playerRadius),
+                new THREE.Vector3(newX + playerRadius, 2, newZ + playerRadius)
+            );
+
+            if (doorBox.intersectsBox(playerBox)) {
+                return true; // Collision detected
+            }
+        }
+    }
+
+    return false; // No collision
+}
+
 // Game loop
 const clock = new THREE.Clock();
 
@@ -767,37 +889,53 @@ function animate() {
     gameState.player.moveDirection.x = 0;
     gameState.player.moveDirection.z = 0;
 
-    // Handle movement
+    // Handle movement with collision detection
     const rad = gameState.player.rotation;
     const speed = 0.1;
 
     if (keys.w || keys.arrowup) {
-        gameState.player.position.x -= Math.sin(rad) * speed;
-        gameState.player.position.z -= Math.cos(rad) * speed;
-        gameState.player.moveDirection.x -= Math.sin(rad);
-        gameState.player.moveDirection.z -= Math.cos(rad);
-        isMoving = true;
+        const newX = gameState.player.position.x - Math.sin(rad) * speed;
+        const newZ = gameState.player.position.z - Math.cos(rad) * speed;
+        if (!checkCollision(newX, newZ)) {
+            gameState.player.position.x = newX;
+            gameState.player.position.z = newZ;
+            gameState.player.moveDirection.x -= Math.sin(rad);
+            gameState.player.moveDirection.z -= Math.cos(rad);
+            isMoving = true;
+        }
     }
     if (keys.s || keys.arrowdown) {
-        gameState.player.position.x += Math.sin(rad) * speed;
-        gameState.player.position.z += Math.cos(rad) * speed;
-        gameState.player.moveDirection.x += Math.sin(rad);
-        gameState.player.moveDirection.z += Math.cos(rad);
-        isMoving = true;
+        const newX = gameState.player.position.x + Math.sin(rad) * speed;
+        const newZ = gameState.player.position.z + Math.cos(rad) * speed;
+        if (!checkCollision(newX, newZ)) {
+            gameState.player.position.x = newX;
+            gameState.player.position.z = newZ;
+            gameState.player.moveDirection.x += Math.sin(rad);
+            gameState.player.moveDirection.z += Math.cos(rad);
+            isMoving = true;
+        }
     }
     if (keys.a) {
-        gameState.player.position.x -= Math.cos(rad) * speed;
-        gameState.player.position.z += Math.sin(rad) * speed;
-        gameState.player.moveDirection.x -= Math.cos(rad);
-        gameState.player.moveDirection.z += Math.sin(rad);
-        isMoving = true;
+        const newX = gameState.player.position.x - Math.cos(rad) * speed;
+        const newZ = gameState.player.position.z + Math.sin(rad) * speed;
+        if (!checkCollision(newX, newZ)) {
+            gameState.player.position.x = newX;
+            gameState.player.position.z = newZ;
+            gameState.player.moveDirection.x -= Math.cos(rad);
+            gameState.player.moveDirection.z += Math.sin(rad);
+            isMoving = true;
+        }
     }
     if (keys.d) {
-        gameState.player.position.x += Math.cos(rad) * speed;
-        gameState.player.position.z -= Math.sin(rad) * speed;
-        gameState.player.moveDirection.x += Math.cos(rad);
-        gameState.player.moveDirection.z -= Math.sin(rad);
-        isMoving = true;
+        const newX = gameState.player.position.x + Math.cos(rad) * speed;
+        const newZ = gameState.player.position.z - Math.sin(rad) * speed;
+        if (!checkCollision(newX, newZ)) {
+            gameState.player.position.x = newX;
+            gameState.player.position.z = newZ;
+            gameState.player.moveDirection.x += Math.cos(rad);
+            gameState.player.moveDirection.z -= Math.sin(rad);
+            isMoving = true;
+        }
     }
     if (keys.arrowleft) rotatePlayer('left');
     if (keys.arrowright) rotatePlayer('right');
@@ -809,24 +947,32 @@ function animate() {
         mouse.y = 0;
     }
 
-    // Handle joystick input (mobile)
+    // Handle joystick input (mobile) with collision detection
     if (touch.joystick.active) {
         // Forward/backward based on joystick Y
         if (Math.abs(touch.joystick.y) > 0.1) {
-            gameState.player.position.x -= Math.sin(rad) * speed * touch.joystick.y;
-            gameState.player.position.z -= Math.cos(rad) * speed * touch.joystick.y;
-            gameState.player.moveDirection.x -= Math.sin(rad) * touch.joystick.y;
-            gameState.player.moveDirection.z -= Math.cos(rad) * touch.joystick.y;
-            isMoving = true;
+            const newX = gameState.player.position.x - Math.sin(rad) * speed * touch.joystick.y;
+            const newZ = gameState.player.position.z - Math.cos(rad) * speed * touch.joystick.y;
+            if (!checkCollision(newX, newZ)) {
+                gameState.player.position.x = newX;
+                gameState.player.position.z = newZ;
+                gameState.player.moveDirection.x -= Math.sin(rad) * touch.joystick.y;
+                gameState.player.moveDirection.z -= Math.cos(rad) * touch.joystick.y;
+                isMoving = true;
+            }
         }
 
         // Left/right based on joystick X
         if (Math.abs(touch.joystick.x) > 0.1) {
-            gameState.player.position.x += Math.cos(rad) * speed * touch.joystick.x;
-            gameState.player.position.z -= Math.sin(rad) * speed * touch.joystick.x;
-            gameState.player.moveDirection.x += Math.cos(rad) * touch.joystick.x;
-            gameState.player.moveDirection.z -= Math.sin(rad) * touch.joystick.x;
-            isMoving = true;
+            const newX = gameState.player.position.x + Math.cos(rad) * speed * touch.joystick.x;
+            const newZ = gameState.player.position.z - Math.sin(rad) * speed * touch.joystick.x;
+            if (!checkCollision(newX, newZ)) {
+                gameState.player.position.x = newX;
+                gameState.player.position.z = newZ;
+                gameState.player.moveDirection.x += Math.cos(rad) * touch.joystick.x;
+                gameState.player.moveDirection.z -= Math.sin(rad) * touch.joystick.x;
+                isMoving = true;
+            }
         }
     }
 
