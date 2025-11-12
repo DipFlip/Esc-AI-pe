@@ -876,21 +876,20 @@ function pushBlock(blockObj) {
         return;
     }
 
-    // Calculate push direction based on player's rotation
-    const rad = gameState.player.rotation;
-    const pushX = -Math.sin(rad);
-    const pushZ = -Math.cos(rad);
+    // Calculate push direction from player to block
+    const dx = blockObj.mesh.position.x - gameState.player.position.x;
+    const dz = blockObj.mesh.position.z - gameState.player.position.z;
 
     // Determine the primary push direction (snap to cardinal directions)
     let deltaX = 0;
     let deltaZ = 0;
 
-    if (Math.abs(pushX) > Math.abs(pushZ)) {
-        // Push in X direction
-        deltaX = pushX > 0 ? 1 : -1;
+    if (Math.abs(dx) > Math.abs(dz)) {
+        // Push in X direction (away from player)
+        deltaX = dx > 0 ? 1 : -1;
     } else {
-        // Push in Z direction
-        deltaZ = pushZ > 0 ? 1 : -1;
+        // Push in Z direction (away from player)
+        deltaZ = dz > 0 ? 1 : -1;
     }
 
     // Calculate new position
