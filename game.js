@@ -525,11 +525,15 @@ createDoor(-arenaSize / 2, 0, Math.PI / 2); // Door on the left (west)
 createDoor(0, arenaSize / 2, 0); // Door at the back (north)
 
 // Create hole puzzle - key surrounded by holes
-// Create holes in a pattern around position (7, 7)
+// Create holes in a 3x3 pattern around position (7, 7)
+createHole(6, 6);  // Bottom-left hole
 createHole(6, 7);  // Left hole
-createHole(8, 7);  // Right hole
+createHole(6, 8);  // Top-left hole
 createHole(7, 6);  // Bottom hole
 createHole(7, 8);  // Top hole
+createHole(8, 6);  // Bottom-right hole
+createHole(8, 7);  // Right hole
+createHole(8, 8);  // Top-right hole
 
 // Create pushable block that can be pushed into one of the holes
 createPushableBlock(5, 7); // Block to the left that can be pushed right into the left hole
