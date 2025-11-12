@@ -17,7 +17,7 @@ const gameState = {
     doors: [],
     floatingKeys: [], // Track floating key objects for animation
     pushableBlock: null, // Track the pushable block
-    hole: null, // Track the hole position
+    holes: [], // Track all holes in the game
     animations: {
         mixer: null,
         actions: {},
@@ -247,6 +247,7 @@ fbxLoader.load(
         createKey(3, 3);
         createKey(-3, -3);
         createKey(6, -6);
+        createKey(7, 7); // Key surrounded by holes - requires puzzle solving
     },
     (progress) => {
         console.log('Loading key model:', (progress.loaded / progress.total * 100).toFixed(2) + '%');
@@ -257,6 +258,7 @@ fbxLoader.load(
         createKey(3, 3);
         createKey(-3, -3);
         createKey(6, -6);
+        createKey(7, 7); // Key surrounded by holes - requires puzzle solving
     }
 );
 
@@ -412,10 +414,11 @@ function createHole(x, z) {
         x: x,
         z: z,
         gridX: Math.round(x),
-        gridZ: Math.round(z)
+        gridZ: Math.round(z),
+        filled: false // Track if hole has been filled with a block
     };
 
-    gameState.hole = holeData;
+    gameState.holes.push(holeData);
 
     return hole;
 }
@@ -521,9 +524,15 @@ createDoor(arenaSize / 2, 0, Math.PI / 2); // Door on the right (east)
 createDoor(-arenaSize / 2, 0, Math.PI / 2); // Door on the left (west)
 createDoor(0, arenaSize / 2, 0); // Door at the back (north)
 
-// Create pushable block and hole
-createPushableBlock(-2, -2);
-createHole(2, 2);
+// Create hole puzzle - key surrounded by holes
+// Create holes in a pattern around position (7, 7)
+createHole(6, 7);  // Left hole
+createHole(8, 7);  // Right hole
+createHole(7, 6);  // Bottom hole
+createHole(7, 8);  // Top hole
+
+// Create pushable block that can be pushed into one of the holes
+createPushableBlock(5, 7); // Block to the left that can be pushed right into the left hole
 
 // Camera setup
 camera.position.set(0, 5, 10);
@@ -1062,6 +1071,24 @@ function checkCollision(newX, newZ) {
         }
     }
 
+    // Check collision with unfilled holes
+    for (const hole of gameState.holes) {
+        if (!hole.filled) {
+            const holeBox = new THREE.Box3(
+                new THREE.Vector3(hole.x - 0.55, 0, hole.z - 0.55),
+                new THREE.Vector3(hole.x + 0.55, 0.1, hole.z + 0.55)
+            );
+            const playerBox = new THREE.Box3(
+                new THREE.Vector3(newX - playerRadius, 0, newZ - playerRadius),
+                new THREE.Vector3(newX + playerRadius, 2, newZ + playerRadius)
+            );
+
+            if (holeBox.intersectsBox(playerBox)) {
+                return true; // Collision detected - can't walk over hole
+            }
+        }
+    }
+
     return false; // No collision
 }
 
@@ -1256,16 +1283,19 @@ function animate() {
             block.mesh.position.z = block.targetZ;
             block.pushing = false;
 
-            // Check if block is now in the hole
-            if (gameState.hole &&
-                block.gridX === gameState.hole.gridX &&
-                block.gridZ === gameState.hole.gridZ &&
-                !block.inHole) {
-                // Block is in the hole - animate it falling in
-                block.inHole = true;
-                block.fallingInHole = true;
-                block.targetY = -0.4; // Lower it more so it's mostly in the hole
-                updateStatus('Block slotted into the hole!');
+            // Check if block is now in a hole
+            for (const hole of gameState.holes) {
+                if (block.gridX === hole.gridX &&
+                    block.gridZ === hole.gridZ &&
+                    !block.inHole) {
+                    // Block is in the hole - animate it falling in
+                    block.inHole = true;
+                    block.fallingInHole = true;
+                    block.targetY = -0.4; // Lower it more so it's mostly in the hole
+                    hole.filled = true; // Mark hole as filled
+                    updateStatus('Block slotted into the hole!');
+                    break;
+                }
             }
         }
     }
