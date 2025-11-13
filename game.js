@@ -525,18 +525,44 @@ createDoor(-arenaSize / 2, 0, Math.PI / 2); // Door on the left (west)
 createDoor(0, arenaSize / 2, 0); // Door at the back (north)
 
 // Create hole puzzle - key surrounded by holes
-// Create holes in a 3x3 pattern around position (7, 7)
-createHole(6, 6);  // Bottom-left hole
-createHole(6, 7);  // Left hole
-createHole(6, 8);  // Top-left hole
-createHole(7, 6);  // Bottom hole
-createHole(7, 8);  // Top hole
-createHole(8, 6);  // Bottom-right hole
-createHole(8, 7);  // Right hole
-createHole(8, 8);  // Top-right hole
+// Create holes in a 5x5 pattern around position (7, 7)
+// Row 5
+createHole(5, 5);
+createHole(5, 6);
+createHole(5, 7);
+createHole(5, 8);
+createHole(5, 9);
+
+// Row 6
+createHole(6, 5);
+createHole(6, 6);
+createHole(6, 7);
+createHole(6, 8);
+createHole(6, 9);
+
+// Row 7 (skip center at 7,7 where key is)
+createHole(7, 5);
+createHole(7, 6);
+// (7, 7) is the center - key is here
+createHole(7, 8);
+createHole(7, 9);
+
+// Row 8
+createHole(8, 5);
+createHole(8, 6);
+createHole(8, 7);
+createHole(8, 8);
+createHole(8, 9);
+
+// Row 9
+createHole(9, 5);
+createHole(9, 6);
+createHole(9, 7);
+createHole(9, 8);
+createHole(9, 9);
 
 // Create pushable block that can be pushed into one of the holes
-createPushableBlock(5, 7); // Block to the left that can be pushed right into the left hole
+createPushableBlock(4, 7); // Block to the left that can be pushed into a hole
 
 // Camera setup
 camera.position.set(0, 5, 10);
@@ -883,9 +909,14 @@ function pickup() {
 }
 
 function pushBlock(blockObj) {
-    // Don't allow pushing if already animating
+    // Don't allow pushing if already animating or in a hole
     if (blockObj.pushing) {
         updateStatus('Block is already moving!');
+        return;
+    }
+
+    if (blockObj.inHole) {
+        updateStatus('Block is stuck in the hole!');
         return;
     }
 
